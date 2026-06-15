@@ -22,6 +22,9 @@
 // Python interpreter remains running).
 //
 
+#ifndef __EMSCRIPTEN__
+
+
 #include "event_loop.h"
 #include "common.h"
 
@@ -162,3 +165,5 @@ void deinitialize(bool wait) {
 
 } // namespace event_loop
 } // namespace reticulate
+
+#endif // __EMSCRIPTEN__

@@ -1,4 +1,4 @@
-
+#ifndef __EMSCRIPTEN__
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -137,3 +137,5 @@ void deinitialize() {
 #endif // end unix
 
 } // namespace pending_py_calls_notifier
+
+#ifndef __EMSCRIPTEN__

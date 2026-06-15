@@ -12,9 +12,11 @@ using namespace Rcpp;
 #include "reticulate_types.h"
 #include "common.h"
 
+#ifndef __EMSCRIPTEN__
 #include "event_loop.h"
 #include "tinythread.h"
 #include "pending_py_calls_notifier.h"
+#endif // __EMSCRIPTEN__
 
 #include <fstream>
 #include <time.h>

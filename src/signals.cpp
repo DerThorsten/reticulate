@@ -1,4 +1,4 @@
-
+#ifndef __EMSCRIPTEN__
 #ifndef _WIN32
 # include <string.h>
 # include <signal.h>
@@ -65,3 +65,4 @@ void setInterruptsSuspended(bool value) {
 } // end namespace signals
 } // end namespace reticulate
 
+#ifndef __EMSCRIPTEN__
