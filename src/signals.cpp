@@ -65,4 +65,4 @@ void setInterruptsSuspended(bool value) {
 } // end namespace signals
 } // end namespace reticulate
 
-#ifndef __EMSCRIPTEN__
+#endif // __EMSCRIPTEN__

@@ -138,4 +138,4 @@ void deinitialize() {
 
 } // namespace pending_py_calls_notifier
 
-#ifndef __EMSCRIPTEN__
+#endif // __EMSCRIPTEN__

@@ -1,4 +1,6 @@
-
+#ifdef __EMSCRIPTEN__
+  #include "emscripten_helper.h"
+#endif
 #include "libpython.h"
 
 #define RCPP_NO_MODULES
@@ -12,9 +14,9 @@ using namespace Rcpp;
 #include "reticulate_types.h"
 #include "common.h"
 
+#include "tinythread.h"
 #ifndef __EMSCRIPTEN__
 #include "event_loop.h"
-#include "tinythread.h"
 #include "pending_py_calls_notifier.h"
 #endif // __EMSCRIPTEN__
 
@@ -191,7 +193,8 @@ void Rcpp_precious_remove_main_thread(SEXP object) {
   if (is_main_thread()) {
     return Rcpp_precious_remove(object);
   }
-
+  
+  #ifndef __EMSCRIPTEN__
   // #Py_AddPendingCall can fail sometimes, so we retry a few times
   const size_t wait_ms = 100;
   size_t waited_ms = 0;
@@ -209,6 +212,7 @@ void Rcpp_precious_remove_main_thread(SEXP object) {
         return;
     }
   }
+  #endif // __EMSCRIPTEN__
 }
 
 void py_capsule_free(PyObject* capsule) {
@@ -2751,7 +2755,7 @@ int call_python_function(void* data) {
     return -1;
 }
 
-
+#ifndef __EMSCRIPTEN__
 extern "C" PyObject* schedule_python_function_on_main_thread(
                 PyObject *self, PyObject* args, PyObject* keywords) {
 
@@ -2808,6 +2812,7 @@ extern "C" PyObject* schedule_python_function_on_main_thread(
   Py_IncRef(Py_None);
   return Py_None;
 }
+#endif
 
 #ifdef _WIN32
 
@@ -2860,6 +2865,7 @@ static void interrupt_handler(int signum) {
 }
 
 
+#ifndef __EMSCRIPTEN__
 PyOS_sighandler_t orig_interrupt_handler = NULL;
 
 #ifndef _WIN32
@@ -2933,15 +2939,17 @@ PyObject* python_interrupt_handler(PyObject *module, PyObject *args)
   PyErr_SetNone(PyExc_KeyboardInterrupt);
   return NULL;
 }
-
+#endif
 
 PyMethodDef RPYCallMethods[] = {
   { "call_r_function", (PyCFunction)call_r_function,
     METH_VARARGS | METH_KEYWORDS, "Call an R function" },
+  #ifndef __EMSCRIPTEN__
   { "schedule_python_function_on_main_thread", (PyCFunction)schedule_python_function_on_main_thread,
     METH_VARARGS | METH_KEYWORDS, "Call a Python function on the main thread" },
-  { "python_interrupt_handler", (PyCFunction)python_interrupt_handler,
-    METH_VARARGS, "Handle an interrupt signal" },
+    { "python_interrupt_handler", (PyCFunction)python_interrupt_handler,
+      METH_VARARGS, "Handle an interrupt signal" },
+  #endif
   { NULL, NULL, 0, NULL }
 };
 
@@ -3002,6 +3010,7 @@ void trace_print(int threadId, PyFrameObject *frame) {
   PySys_WriteStderr(tracemsg.c_str());
 }
 
+#ifndef __EMSCRIPTEN__
 void trace_thread_main(void* aArg) {
 
 
@@ -3028,6 +3037,7 @@ tthread::thread* ptrace_thread;
 void trace_thread_init(int tracems) {
   ptrace_thread = new tthread::thread(trace_thread_main, &tracems);
 }
+#endif
 
 namespace {
 
@@ -3187,6 +3197,7 @@ void py_initialize(const std::string& python,
       s_was_python_initialized_by_reticulate = true;
 
 #ifndef _WIN32
+#ifndef __EMSCRIPTEN__
       // Python ignores SIGPIPE by default to avoid the process being
       // interrupted during normal pipe / IPC usage (EPIPE is handled as an
       // exception instead). Because reticulate uses Py_InitializeEx(0), we
@@ -3194,11 +3205,13 @@ void py_initialize(const std::string& python,
       s_orig_sigpipe_handler = PyOS_setsig(SIGPIPE, SIG_IGN);
       s_restore_sigpipe_handler = true;
 #endif
+#endif
 
       const wchar_t *argv[1] = {s_python_v3.c_str()};
       PySys_SetArgv_v3(1, const_cast<wchar_t**>(argv));
-
+#ifndef __EMSCRIPTEN__
       orig_interrupt_handler = install_interrupt_handlers_();
+#endif
     }
 
   } else { // python2
@@ -3224,8 +3237,10 @@ void py_initialize(const std::string& python,
     const char *argv[1] = {s_python.c_str()};
     PySys_SetArgv(1, const_cast<char**>(argv));
 
+    #ifndef __EMSCRIPTEN__
     orig_interrupt_handler = install_interrupt_handlers_();
     reticulate_setsig(SIGINT, interrupt_handler);
+    #endif
   }
 
   s_main_thread = tthread::this_thread::get_id();
@@ -3245,6 +3260,7 @@ void py_initialize(const std::string& python,
   else
     s_numpy_load_error = numpy_load_error;
 
+  #ifndef __EMSCRIPTEN__
   // initialize trace
   Function sysGetEnv("Sys.getenv");
   RObject tracems_env_( sysGetEnv("RETICULATE_DUMP_STACK_TRACE", 0) );
@@ -3264,6 +3280,7 @@ void py_initialize(const std::string& python,
     }, nullptr);
     flush_std_buffers();
   });
+  #endif
 }
 
 bool is_py_finalized = false;
@@ -3274,8 +3291,10 @@ void py_finalize() {
   if (R_ParseEvalString(".globals$finalized", ns_reticulate) != R_NilValue)
     stop("py_finalize() can only be called once per R session");
 
+  #ifndef __EMSCRIPTEN__
   reticulate::event_loop::deinitialize(/*wait =*/ false);
   pending_py_calls_notifier::deinitialize();
+  #endif
 
   // We shouldn't call PyFinalize() if R is embedded in Python. https://github.com/rpy2/rpy2/issues/872
   if(!s_is_python_initialized || !s_was_python_initialized_by_reticulate)
@@ -3284,14 +3303,18 @@ void py_finalize() {
   {
     PyGILState_Ensure();
     Py_MakePendingCalls();
+
+#ifndef __EMSCRIPTEN__
     if (orig_interrupt_handler)
       reticulate_setsig(SIGINT, orig_interrupt_handler);
+    
 
 #ifndef _WIN32
     if (s_restore_sigpipe_handler) {
       PyOS_setsig(SIGPIPE, s_orig_sigpipe_handler);
       s_restore_sigpipe_handler = false;
     }
+#endif
 #endif
 
     is_py_finalized = true;

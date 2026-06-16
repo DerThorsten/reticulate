@@ -1,4 +1,3 @@
-
 // NOTE: This copy of tinythread has been modified, primarily to ensure
 // compatibility with the CRAN requirements for R packages. In particular, in
 // places where tinythread would normally assert() and exit the process,
@@ -29,6 +28,7 @@ freely, subject to the following restrictions:
 
 #ifndef _TINYTHREAD_H_
 #define _TINYTHREAD_H_
+#ifndef __EMSCRIPTEN__
 
 #include <R_ext/Error.h>  // for Rf_error()
 
@@ -1007,5 +1007,35 @@ inline thread::id this_thread::get_id()
 }
 
 
+#else  // __EMSCRIPTEN__
 
+// include chrono
+#include <chrono>
+
+namespace tthread {
+  class mutex {};
+  class recursive_mutex {};
+  template <class T> class lock_guard {};
+  class condition_variable {};
+  class thread {
+    public:
+      typedef int native_handle_type;
+      typedef int id;
+      thread() {}
+      thread(void (*aFunction)(void *), void * aArg) {}
+      ~thread() {}
+      void join() {}
+      bool joinable() const { return false; }
+      void detach() {}
+      id get_id() const { return id(); }
+      inline native_handle_type native_handle() { return 0; }
+      static unsigned hardware_concurrency() { return 1; }
+  };
+  namespace this_thread {
+    thread::id get_id() { return thread::id(); }
+    inline void yield() {}
+    template <class _Rep, class _Period> void sleep_for(const std::chrono::duration<_Rep, _Period>& aTime) {}
+  }
+}
+#endif // __EMSCRIPTEN__
 #endif // _TINYTHREAD_H_
