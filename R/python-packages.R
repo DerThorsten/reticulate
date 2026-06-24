@@ -44,6 +44,12 @@
 #' @export
 configure_environment <- function(package = NULL, force = FALSE) {
 
+  is_emscripten <- Sys.info()[["sysname"]]== "Emscripten" 
+  if(is_emscripten) {
+    message("configure_environment() is a no-op in Emscripten")
+    return(FALSE)
+  }
+
   # no-op when Python has not yet been initialized
   if (!is_python_initialized())
     return(FALSE)

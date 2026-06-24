@@ -43,6 +43,7 @@ is_python_finalized <- function() {
 
 ensure_python_initialized <- function(required_module = NULL) {
 
+  print("ensure_python_initialized() called")
   # nothing to do if python is initialized
   if (is_python_initialized())
     return()
@@ -54,7 +55,7 @@ ensure_python_initialized <- function(required_module = NULL) {
   callback <- getOption("reticulate.python.beforeInitialized")
   if (is.function(callback))
     callback()
-
+  
   # make sure this module is used for an environment name.
   if(!is.null(required_module))
     register_delay_load_import(required_module)
@@ -110,135 +111,161 @@ call_init_hooks <- function() {
 }
 
 initialize_python <- function(required_module = NULL, use_environment = NULL) {
+  is_emscripten <- Sys.info()[["sysname"]]== "Emscripten" 
+  print("initialize_python() called")
+  if(!is_emscripten) {
 
-  # provide hint to install Miniconda if no Python is found
-  python_not_found <- function(msg) {
-    hint <- 'See the Python "Order of Discovery" here: https://rstudio.github.io/reticulate/articles/versions.html#order-of-discovery.'
-    stop(paste(msg, hint, sep = "\n"), call. = FALSE)
-  }
+    # provide hint to install Miniconda if no Python is found
+    python_not_found <- function(msg) {
+      hint <- 'See the Python "Order of Discovery" here: https://rstudio.github.io/reticulate/articles/versions.html#order-of-discovery.'
+      stop(paste(msg, hint, sep = "\n"), call. = FALSE)
+    }
 
-  # resolve top level module for search
-  if (!is.null(required_module))
-    required_module <- strsplit(required_module, ".", fixed = TRUE)[[1L]][[1L]]
+    # resolve top level module for search
+    if (!is.null(required_module))
+      required_module <- strsplit(required_module, ".", fixed = TRUE)[[1L]][[1L]]
 
-  # find configuration
-  config <- local({
-    op <- options(reticulate.python.initializing = TRUE)
-    on.exit(options(op), add = TRUE)
-    py_discover_config(required_module, use_environment)
-  })
+    # find configuration
+    config <- local({
+      op <- options(reticulate.python.initializing = TRUE)
+      on.exit(options(op), add = TRUE)
+      py_discover_config(required_module, use_environment)
+    })
 
-  # check if R is embedded in an python environment
-  py_embedded <- !is.null(main_process_python_info())
+    # check if R is embedded in an python environment
+    py_embedded <- !is.null(main_process_python_info())
 
-  # check for basic python pre-requisites
-  if (is.null(config)) {
-    python_not_found("Installation of Python not found, Python bindings not loaded.")
-  } else if (!is_windows() && is.null(config$libpython)) {
-    python_not_found("Python shared library not found, Python bindings not loaded.")
-  } else if (is_incompatible_arch(config)) {
-    fmt <- "Your current architecture is %s; however, this version of Python was compiled for %s."
-    msg <- sprintf(fmt, current_python_arch(), config$architecture)
-    python_not_found(msg)
-  }
+    # check for basic python pre-requisites
+    if (is.null(config)) {
+      python_not_found("Installation of Python not found, Python bindings not loaded.")
+    } else if (!is_windows() && is.null(config$libpython)) {
+      python_not_found("Python shared library not found, Python bindings not loaded.")
+    } else if (is_incompatible_arch(config)) {
+      fmt <- "Your current architecture is %s; however, this version of Python was compiled for %s."
+      msg <- sprintf(fmt, current_python_arch(), config$architecture)
+      python_not_found(msg)
+    }
 
-  # check numpy version and provide a load error message if we don't satisfy it
-  numpy_load_error <- tryCatch(
+    # check numpy version and provide a load error message if we don't satisfy it
+    numpy_load_error <- tryCatch(
 
-    expr = {
-      if (is.null(config$numpy) || config$numpy$version < "1.6")
-        "installation of Numpy >= 1.6 not found"
-      else
-        ""
-    },
+      expr = {
+        if (is.null(config$numpy) || config$numpy$version < "1.6")
+          "installation of Numpy >= 1.6 not found"
+        else
+          ""
+      },
 
-    error = function(e) "<unknown>"
+      error = function(e) "<unknown>"
 
-  )
-
-  # if we're a virtual environment then set VIRTUAL_ENV (need to
-  # set this before initializing Python so that module paths are
-  # set as appropriate)
-  if (nzchar(config$virtualenv))
-    Sys.setenv(VIRTUAL_ENV = config$virtualenv)
-
-  # set R_SESSION_INITIALIZED flag (used by rpy2)
-  curr_session_env <- Sys.getenv("R_SESSION_INITIALIZED", unset = NA)
-  Sys.setenv(R_SESSION_INITIALIZED = sprintf('PID=%s:NAME="reticulate"', Sys.getpid()))
-
-  # prefer utf-8 encoding on Windows in RStudio
-  if (is_rstudio()) {
-    encoding <- Sys.getenv("PYTHONIOENCODING", unset = NA)
-    if (is.na(encoding))
-      Sys.setenv(PYTHONIOENCODING = "utf-8")
-  }
-
-  # munge PATH for python (needed so libraries can be found in some cases)
-  oldpath <- python_munge_path(config$python)
-  # also munge LD_LIBRARY_PATH on Linux
-  # (needed for Python 3.12 preinstalled on GHA runners, perhaps other installations too)
-  prefix_python_lib_to_ld_library_path(config$python)
-
-  # on macOS, we need to do some gymnastics to ensure that Anaconda
-  # libraries can be properly discovered (and this will only work in RStudio)
-  if (is_osx()) local({
-
-    symlink <- Sys.getenv("RSTUDIO_FALLBACK_LIBRARY_PATH", unset = NA)
-    if (is.na(symlink))
-      return()
-
-    unlink(symlink)
-    target <- dirname(config$libpython)
-    file.symlink(target, symlink)
-
-  })
-
-  # initialize python
-  tryCatch({
-
-    # set PYTHONPATH (required to load virtual environments in some cases?)
-    oldpythonpath <- Sys.getenv("PYTHONPATH")
-    newpythonpath <- Sys.getenv(
-      "RETICULATE_PYTHONPATH",
-      unset = paste(
-        config$pythonpath,
-        system.file("python", package = "reticulate"),
-        sep = .Platform$path.sep
-      )
     )
 
-    local({
+    # if we're a virtual environment then set VIRTUAL_ENV (need to
+    # set this before initializing Python so that module paths are
+    # set as appropriate)
+    if (nzchar(config$virtualenv))
+      Sys.setenv(VIRTUAL_ENV = config$virtualenv)
 
-      # set PYTHONPATH while we initialize
-      Sys.setenv(PYTHONPATH = newpythonpath)
-      on.exit(Sys.setenv(PYTHONPATH = oldpythonpath), add = TRUE)
+    # set R_SESSION_INITIALIZED flag (used by rpy2)
+    curr_session_env <- Sys.getenv("R_SESSION_INITIALIZED", unset = NA)
+    Sys.setenv(R_SESSION_INITIALIZED = sprintf('PID=%s:NAME="reticulate"', Sys.getpid()))
 
-      # initialize Python
-      py_initialize(config$python,
-                    config$libpython,
-                    config$pythonhome,
-                    config$virtualenv_activate,
-                    config$version$major,
-                    config$version$minor,
-                    interactive(),
-                    numpy_load_error)
+    # prefer utf-8 encoding on Windows in RStudio
+    if (is_rstudio()) {
+      encoding <- Sys.getenv("PYTHONIOENCODING", unset = NA)
+      if (is.na(encoding))
+        Sys.setenv(PYTHONIOENCODING = "utf-8")
+    }
+
+    # munge PATH for python (needed so libraries can be found in some cases)
+    oldpath <- python_munge_path(config$python)
+    # also munge LD_LIBRARY_PATH on Linux
+    # (needed for Python 3.12 preinstalled on GHA runners, perhaps other installations too)
+    prefix_python_lib_to_ld_library_path(config$python)
+
+    # on macOS, we need to do some gymnastics to ensure that Anaconda
+    # libraries can be properly discovered (and this will only work in RStudio)
+    if (is_osx()) local({
+
+      symlink <- Sys.getenv("RSTUDIO_FALLBACK_LIBRARY_PATH", unset = NA)
+      if (is.na(symlink))
+        return()
+
+      unlink(symlink)
+      target <- dirname(config$libpython)
+      file.symlink(target, symlink)
 
     })
 
-    },
+    # initialize python
+    tryCatch({
 
-    error = function(e) {
-      Sys.setenv(PATH = oldpath)
-      if (is.na(curr_session_env)) {
-        Sys.unsetenv("R_SESSION_INITIALIZED")
-      } else {
-        Sys.setenv(R_SESSION_INITIALIZED = curr_session_env)
+      # set PYTHONPATH (required to load virtual environments in some cases?)
+      oldpythonpath <- Sys.getenv("PYTHONPATH")
+      newpythonpath <- Sys.getenv(
+        "RETICULATE_PYTHONPATH",
+        unset = paste(
+          config$pythonpath,
+          system.file("python", package = "reticulate"),
+          sep = .Platform$path.sep
+        )
+      )
+
+      local({
+
+        # set PYTHONPATH while we initialize
+        Sys.setenv(PYTHONPATH = newpythonpath)
+        on.exit(Sys.setenv(PYTHONPATH = oldpythonpath), add = TRUE)
+
+        # initialize Python
+        py_initialize(config$python,
+                      config$libpython,
+                      config$pythonhome,
+                      config$virtualenv_activate,
+                      config$version$major,
+                      config$version$minor,
+                      interactive(),
+                      numpy_load_error)
+
+      })
+
+      },
+
+      error = function(e) {
+        Sys.setenv(PATH = oldpath)
+        if (is.na(curr_session_env)) {
+          Sys.unsetenv("R_SESSION_INITIALIZED")
+        } else {
+          Sys.setenv(R_SESSION_INITIALIZED = curr_session_env)
+        }
+        stop(e)
       }
-      stop(e)
-    }
 
-  )
+    )
+  }
+  else {
+    numpy_load_error <- ""
+    config <- local({
+      op <- options(reticulate.python.initializing = TRUE)
+      # on.exit(options(op), add = TRUE)
+      # py_discover_config(required_module, use_environment)
+    })
+    print("try to initialize Python in Emscripten")
+    py_embedded <- TRUE
+    py_initialize(
+      "python",
+      "/lib/libpython3.13.so",
+      '/',
+      "",
+      3,
+      13,
+      FALSE,
+      numpy_load_error
+    )
+    print("post py_initialize() in Emscripten")
+  }
 
+  print("Python initialized, setting finalizer")
   # allow enabling the Python finalizer
   reg.finalizer(.globals, function(e) {
     try(py_allow_threads_impl(FALSE))
@@ -246,35 +273,43 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
       py_finalize()
   }, onexit = TRUE)
 
+
+  print("Python initialized, setting globals")
   # set available flag indicating we have py bindings
   config$available <- TRUE
 
-  if (py_embedded) {
 
+  if (py_embedded) {
+    print("Python is embedded, adding reticulate python path to sys.path")
     # we need to insert path to rpytools directly for embedded R
     path <- system.file("python", package = "reticulate")
     fmt <- "import sys; sys.path.append(%s)"
     cmd <- sprintf(fmt, shQuote(path))
 
-    py_run_string_impl(cmd)
+    # print which cmd we are running
+    print(paste("running command:", cmd))
 
+    py_run_string_impl(cmd)
+    print("done run string")
   }
 
-  local({
-    # patch sys.executable to point to python.exe, not Rterm.exe or rsession-utf8.exe, #1258
-    patch <- sprintf("import sys; sys.executable  = r'''%s'''",
-                     config$executable)
-    py_run_string_impl(patch, local = TRUE)
-  })
+  # local({
+  #   # patch sys.executable to point to python.exe, not Rterm.exe or rsession-utf8.exe, #1258
+  #   patch <- sprintf("import sys; sys.executable  = r'''%s'''",
+  #                    config$executable)
+  #   py_run_string_impl(patch, local = TRUE)
+  # })
 
-  if (nzchar(config$base_executable)) local({
-    # just like sys.executable, patch to point to python.exe, not Rterm.exe
-    # need to patch for multiprocessing to work on windows, perhaps other things too.
-    # in venvs, _base_executable should point to the venv starter, #1430
-    patch <- sprintf("import sys; sys._base_executable = r'''%s'''",
-                     config$base_executable)
-    py_run_string_impl(patch, local = TRUE)
-  })
+  # if (nzchar(config$base_executable)) local({
+  #   # just like sys.executable, patch to point to python.exe, not Rterm.exe
+  #   # need to patch for multiprocessing to work on windows, perhaps other things too.
+  #   # in venvs, _base_executable should point to the venv starter, #1430
+  #   patch <- sprintf("import sys; sys._base_executable = r'''%s'''",
+  #                    config$base_executable)
+  #   py_run_string_impl(patch, local = TRUE)
+  # })
+
+  print("run string...")
 
   # ensure modules can be imported from the current working directory
   py_run_string_impl("import sys; sys.path.insert(0, '')", local = TRUE)
@@ -283,24 +318,28 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
   # https://github.com/rstudio/reticulate/issues/586
   py_set_qt_qpa_platform_plugin_path(config)
 
-  if (was_python_initialized_by_reticulate()) {
-    allow_threads <- Sys.getenv("RETICULATE_ALLOW_THREADS", "true")
-    allow_threads <- tolower(allow_threads) %in% c("true", "1", "yes")
-    if (allow_threads) {
-      py_allow_threads_impl(TRUE)
+  # if (was_python_initialized_by_reticulate()) {
+  #   allow_threads <- Sys.getenv("RETICULATE_ALLOW_THREADS", "false")
+  #   allow_threads <- tolower(allow_threads) %in% c("true", "1", "yes")
+  #   if (allow_threads) {
+  #     py_allow_threads_impl(TRUE)
+  #   }
+  # }
+  py_allow_threads_impl(FALSE)
+
+  if(!is_emscripten) {
+    # check for required packages in virtualenvs
+    if (nzchar(config$virtualenv)) {
+      check_required_packages <- Sys.getenv("RETICULATE_CHECK_REQUIRED_PACKAGES", "true")
+      check_required_packages <- tolower(check_required_packages) %in% c("true", "1", "yes")
+      if (check_required_packages) {
+        tryCatch(check_virtualenv_required_packages(config), error = function(e) {
+          # ignore errors, this should never block initialization
+        })
+      }
     }
   }
-
-  if (nzchar(config$virtualenv)) {
-    check_required_packages <- Sys.getenv("RETICULATE_CHECK_REQUIRED_PACKAGES", "true")
-    check_required_packages <- tolower(check_required_packages) %in% c("true", "1", "yes")
-    if (check_required_packages) {
-      tryCatch(check_virtualenv_required_packages(config), error = function(e) {
-        # ignore errors, this should never block initialization
-      })
-    }
-  }
-
+  print("done with ensure_python_initialized()")
   # return config
   config
 }

@@ -2,8 +2,9 @@
 #ifndef RETICULATE_TYPES_H
 #define RETICULATE_TYPES_H
 
-#include "libpython.h"
-using namespace reticulate::libpython;
+// #include "libpython.h"
+// using namespace reticulate::libpython;
+#include  <Python.h>
 
 #define RCPP_NO_MODULES
 #define RCPP_NO_SUGAR

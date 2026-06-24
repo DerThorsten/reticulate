@@ -1,7 +1,24 @@
+#include <iostream>
+
 #ifdef __EMSCRIPTEN__
   #include "emscripten_helper.h"
 #endif
-#include "libpython.h"
+// directely include Python.h, rather than via libpython.h, to avoid the
+#include  <Python.h>
+#include <numpy/ndarraytypes.h>
+#include <numpy/arrayobject.h>
+#include <numpy/numpyconfig.h>
+#include <numpy/npy_math.h>
+#include "libpython_extra.h"
+
+#define PyInt_AsLong PyLong_AsLong
+#define PyString_AsStringAndSize PyBytes_AsStringAndSize
+#define PyString_FromString PyBytes_FromString
+#define PyInt_FromLong PyLong_FromLong
+#define Py_String Py_Unicode
+
+#define PyString_Check PyUnicode_Check
+#define PyInt_Check PyLong_Check
 
 #define RCPP_NO_MODULES
 #define RCPP_NO_SUGAR
@@ -10,12 +27,12 @@
 using namespace Rcpp;
 
 #include "r_api.h"
-#include "signals.h"
 #include "reticulate_types.h"
 #include "common.h"
 
 #include "tinythread.h"
 #ifndef __EMSCRIPTEN__
+#include "signals.h"
 #include "event_loop.h"
 #include "pending_py_calls_notifier.h"
 #endif // __EMSCRIPTEN__
@@ -45,6 +62,7 @@ int _Py_Check(PyObject* o) {
 
 
 PyGILState_STATE _initialize_python_and_PyGILState_Ensure() {
+  std::cout<<"initialize python and PyGILState_Ensure"<<std::endl;
   Function initialize_python(reticulate_get_ns_var("ensure_python_initialized"));
   initialize_python();
   return PyGILState_Ensure();
@@ -68,11 +86,8 @@ tthread::thread::id s_main_thread = 0;
 
 // [[Rcpp::init]]
 void reticulate_init(DllInfo *dll) {
-  // before python is initialized, make these symbols safe to call (always return false)
-  PyIter_Check = &_Py_Check;
-  PyCallable_Check = &_Py_Check;
-  PyGILState_Ensure = &_initialize_python_and_PyGILState_Ensure;
-  // Py_MakePendingCallsRun = &_Py_Check;
+
+
 
   sym_py_object = Rf_install("py_object");
   sym_simple = Rf_install("simple");
@@ -113,14 +128,15 @@ bool is_interactive() {
 }
 
 // track whether we have required numpy
-std::string s_numpy_load_error;
+//std::string s_numpy_load_error;
 bool haveNumPy() {
-  return s_numpy_load_error.empty();
+  return true;
+  //return s_numpy_load_error.empty();
 }
 
 bool requireNumPy() {
   if (!haveNumPy())
-    stop("Required version of NumPy not available: " + s_numpy_load_error);
+    stop("Required version of NumPy not available: ");
   return true;
 }
 
@@ -136,11 +152,11 @@ bool isPyArrayScalar(PyObject* object) {
   return PyArray_CheckScalar(object);
 }
 
-// static buffers for Py_SetProgramName / Py_SetPythonHome
-std::string s_python;
-std::wstring s_python_v3;
-std::string s_pythonhome;
-std::wstring s_pythonhome_v3;
+// // static buffers for Py_SetProgramName / Py_SetPythonHome
+// std::string s_python;
+// std::wstring s_python_v3;
+// std::string s_pythonhome;
+// std::wstring s_pythonhome_v3;
 
 
 
@@ -440,14 +456,14 @@ int narrow_array_typenum(int typenum) {
 
 npy_intp PyArray_ITEMSIZE(PyArrayObject* array) {
   PyArray_Descr *descr = ((PyArrayObject_fields*)array)->descr;
-  switch (PyArray_RUNTIME_VERSION) {
-  case NPY_VERSION_2:
+  //switch (PyArray_RUNTIME_VERSION) {
+  // case NPY_VERSION_2:
     return ((_PyArray_DescrNumPy2*)descr)->elsize;
-  case NPY_VERSION_1:
-    return ((_PyArray_DescrNumPy1*)descr)->elsize;
-  default:
-    return -1;
-  }
+  // case NPY_VERSION_1:
+  //   return ((_PyArray_DescrNumPy1*)descr)->elsize;
+  //default:
+  //  return -1;
+  //}
 }
 
 int narrow_array_typenum(PyArrayObject* array) {
@@ -492,6 +508,7 @@ bool py_is_none(PyObject* object) {
 
 // convenience wrapper for PyImport_Import
 PyObject* py_import(const std::string& module) {
+  std::cout<<"in convenience wrapper for PyImport_Import: "<<module<<std::endl;
   PyObjectPtr module_str(as_python_str(module));
   return PyImport_Import(module_str);
 }
@@ -1723,8 +1740,8 @@ SEXP py_to_r_cpp(PyObject* x, bool convert, bool simple) {
         for (int i=0; i<len; i++) {
           npy_complex128 data = pData[i];
           Rcomplex cpx;
-          cpx.r = data.real;
-          cpx.i = data.imag;
+          cpx.r = npy_creal(data);
+          cpx.i = npy_cimag(data);
           rArray_ptr[i] = cpx;
         }
         break;
@@ -1895,8 +1912,8 @@ SEXP py_to_r_cpp(PyObject* x, bool convert, bool simple) {
       npy_complex128 value;
       PyArray_CastScalarToCtype(x, (void*)&value, toDescr);
       Rcomplex cpx;
-      cpx.r = value.real;
-      cpx.i = value.imag;
+      cpx.r = npy_creal(value);
+      cpx.i = npy_cimag(value);
       return ComplexVector::create(cpx);
     }
 
@@ -2213,7 +2230,8 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
       if (res != 0)
         throw PythonException(py_fetch_error());
     } else {
-      PyArray_BASE(array) = capsule.detach();
+      // PyArray_BASE(array) = capsule.detach(); // DerThorsten changed this
+      PyArray_SetBaseObject((PyArrayObject*)array, capsule.detach());
     }
   }
 
@@ -2493,17 +2511,17 @@ PyObjectRef r_to_py_impl(RObject object, bool convert) {
 
 class AllowPyThreadsScope
 {
-private:
-  PyThreadState *_save;
+// private:
+//   PyThreadState *_save;
 
-public:
-  AllowPyThreadsScope() {
-    _save = PyEval_SaveThread();
-  }
+// public:
+//   AllowPyThreadsScope() {
+//     _save = PyEval_SaveThread();
+//   }
 
-  ~AllowPyThreadsScope() {
-    PyEval_RestoreThread(_save);
-  }
+//   ~AllowPyThreadsScope() {
+//     PyEval_RestoreThread(_save);
+//   }
 };
 
 // custom module used for calling R functions from python wrappers
@@ -2966,7 +2984,7 @@ static struct PyModuleDef RPYCallModuleDef = {
 };
 
 extern "C" PyObject* initializeRPYCall(void) {
-  return PyModule_Create(&RPYCallModuleDef, _PYTHON3_ABI_VERSION);
+  return PyModule_Create(&RPYCallModuleDef);
 }
 
 
@@ -2996,19 +3014,21 @@ void py_activate_virtualenv(const std::string& script) {
 
 }
 
-void trace_print(int threadId, PyFrameObject *frame) {
-  std::string tracemsg = "";
-  while (NULL != frame) {
-    std::string filename = as_std_string(frame->f_code->co_filename);
-    std::string funcname = as_std_string(frame->f_code->co_name);
-    tracemsg = funcname + " " + tracemsg;
+// void trace_print(int threadId, PyFrameObject *frame) {
+//   std::string tracemsg = "";
+//   while (NULL != frame) {
+//     std::string filename = as_std_string(frame->f_code->co_filename);
+//     std::string funcname = as_std_string(frame->f_code->co_name);
+//     tracemsg = funcname + " " + tracemsg;
 
-    frame = frame->f_back;
-  }
+//     frame = frame->f_back;
+//   }
 
-  tracemsg = "THREAD: [" + tracemsg + "]\n";
-  PySys_WriteStderr(tracemsg.c_str());
-}
+//   tracemsg = "THREAD: [" + tracemsg + "]\n";
+//   PySys_WriteStderr(tracemsg.c_str());
+// }
+
+
 
 #ifndef __EMSCRIPTEN__
 void trace_thread_main(void* aArg) {
@@ -3057,7 +3077,7 @@ void loadSymbol(void* pLib, const std::string& name, void** ppSymbol) {
 }
 
 SEXP main_process_python_info_unix() {
-
+  #ifndef __EMSCRIPTEN__
   // bail early if we already know that Python symbols are not available
   // (initialize as true to first assume symbols are available)
   static bool py_symbols_available = true;
@@ -3098,15 +3118,15 @@ SEXP main_process_python_info_unix() {
   GILScope scope;
 
   // read Python program path
-  std::string python_path;
-  if (Py_GetVersion()[0] >= '3') {
-    loadSymbol(pLib, "Py_GetProgramFullPath", (void**) &Py_GetProgramFullPath); // deprecated in 3.13
-    const std::wstring wide_python_path(Py_GetProgramFullPath());
-    python_path = to_string(wide_python_path);
-  } else {
-    loadSymbol(pLib, "Py_GetProgramFullPath", (void**) &Py_GetProgramFullPath_v2);
-    python_path = Py_GetProgramFullPath_v2();
-  }
+  std::string python_path = "python";
+  // if (Py_GetVersion()[0] >= '3') {
+  //   loadSymbol(pLib, "Py_GetProgramFullPath", (void**) &Py_GetProgramFullPath); // deprecated in 3.13
+  //   const std::wstring wide_python_path(Py_GetProgramFullPath());
+  //   python_path = to_string(wide_python_path);
+  // } else {
+  //   loadSymbol(pLib, "Py_GetProgramFullPath", (void**) &Py_GetProgramFullPath_v2);
+  //   python_path = Py_GetProgramFullPath_v2();
+  // }
 
   RObject libpython;
   // read libpython file path
@@ -3122,6 +3142,10 @@ SEXP main_process_python_info_unix() {
 
   return List::create(_["python"] = python_path,
                       _["libpython"] = libpython);
+  #else
+  return List::create(_["python"] = "python",
+                      _["libpython"] = "libpython.so");
+  #endif
 
 }
 
@@ -3158,6 +3182,8 @@ void py_initialize(const std::string& python,
                    bool interactive,
                    const std::string& numpy_load_error) {
 
+  std::cout<<"initialize python"<<std::endl;
+      
   // set python3 and interactive flags
   s_isPython3 = python_major_version == 3;
   s_isInteractive = interactive;
@@ -3165,14 +3191,22 @@ void py_initialize(const std::string& python,
   if(!s_isPython3)
     warning("Python 2 reached EOL on January 1, 2020. Python 2 compatability will be removed in an upcoming reticulate release.");
 
-  // load the library
-  std::string err;
-  if (!libPython().load(libpython, python_major_version, python_minor_version, &err))
-    stop(err);
+  // // load the library
+  // std::cout<<"load python library"<<std::endl;
+  // std::string err;
+  // if (!libPython().load(libpython, python_major_version, python_minor_version, &err)){
+  //   std::cerr << "Failed to load libpython: " << err << std::endl;
+  //   stop(err);
+  // }
+  // std::cout<<"load python library success"<<std::endl;
+
+  std::cout<<"SKIPPED LOADING PYTHON LIBRARY"<<std::endl;
+
 
   if (is_python3()) {
 
     if (Py_IsInitialized()) {
+      std::cout<<"python3 already initialized, skip initialization"<<std::endl;
       // if R is embedded in a python environment, rpycall has to be loaded as a regular
       // module.
       GILScope scope;
@@ -3180,20 +3214,74 @@ void py_initialize(const std::string& python,
       PyDict_SetItemString(PyImport_GetModuleDict(), "rpycall", initializeRPYCall());
 
     } else {
+      std::cout<<"initialize python3"<<std::endl;
+      // // set program name
+      // s_python_v3 = to_wstring(python);
+      // Py_SetProgramName_v3(const_cast<wchar_t*>(s_python_v3.c_str()));
 
-      // set program name
-      s_python_v3 = to_wstring(python);
-      Py_SetProgramName_v3(const_cast<wchar_t*>(s_python_v3.c_str()));
 
-      // set program home
-      s_pythonhome_v3 = to_wstring(pythonhome);
-      Py_SetPythonHome_v3(const_cast<wchar_t*>(s_pythonhome_v3.c_str()));
 
-      // add rpycall module
+      //   var side_path = `/lib/python${version_str}/site-packages`;
+ 
+      //   console.log("PYTHONPATH",pypath);
+      //   console.log("SIDE_PATH",side_path);
+      // Module.setenv("PYTHONHOME", `/`);
+
+
+
+      // get-environment variable PREFIX
+      const char* prefix_env = std::getenv("PREFIX");
+      std::string prefix = prefix_env ? prefix_env : "/";
+      std::cout<<"PREFIX: "<<prefix<<std::endl;
+
+      // set PYTHONPATH
+      const std::string pythonpath = prefix + "/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages:/usr/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages";
+      setenv("PYTHONPATH", pythonpath.c_str(), 1);
+      setenv("PYTHONHOME", prefix.c_str(), 1);
+
+      std::cout<<"do not set python home to "<<pythonhome<<" and python path to "<<pythonpath<<std::endl;
+
+
+
+      
+      std::cout<<"DO append rpycall to inittab"<<std::endl;
       PyImport_AppendInittab("rpycall", &initializeRPYCall);
-
+      
+      
+      std::cout<<"initialize python3 interpreter -- simple@"<<std::endl;
       // initialize python
-      Py_InitializeEx(0); // 0 means "do not install signal handlers"
+
+
+
+      PyStatus status;
+      PyConfig config;
+      
+      PyConfig_InitPythonConfig(&config);
+      config.verbose = 1;
+      config.site_import = 1; 
+      config.module_search_paths_set = 1;
+
+      status = PyConfig_SetString(&config, &config.home, L"/");
+
+
+      PyWideStringList_Append(
+          &config.module_search_paths,
+          L"/lib/python3.13/"
+      );
+
+
+      if (PyStatus_Exception(status))
+      {
+          fprintf(stderr, "%s\n", status.err_msg);
+      }
+
+      // initialize the Python interpreter with the config
+      status = Py_InitializeFromConfig(&config);
+
+
+
+
+      // add rpycall module 
       s_was_python_initialized_by_reticulate = true;
 
 #ifndef _WIN32
@@ -3206,59 +3294,33 @@ void py_initialize(const std::string& python,
       s_restore_sigpipe_handler = true;
 #endif
 #endif
-
-      const wchar_t *argv[1] = {s_python_v3.c_str()};
-      PySys_SetArgv_v3(1, const_cast<wchar_t**>(argv));
+      
+      // const wchar_t *argv[1] = {s_python_v3.c_str()};
+      // PySys_SetArgv(1, const_cast<wchar_t**>(argv));
 #ifndef __EMSCRIPTEN__
       orig_interrupt_handler = install_interrupt_handlers_();
 #endif
     }
 
-  } else { // python2
-
-    // set program name
-    s_python = python;
-    Py_SetProgramName(const_cast<char*>(s_python.c_str()));
-
-    // set program home
-    s_pythonhome = pythonhome;
-    Py_SetPythonHome(const_cast<char*>(s_pythonhome.c_str()));
-
-    if (!Py_IsInitialized()) {
-      // initialize python
-      Py_InitializeEx(0);
-      s_was_python_initialized_by_reticulate = true;
-    }
-
-    // add rpycall module
-    Py_InitModule4("rpycall", RPYCallMethods, (char *)NULL, (PyObject *)NULL,
-                      _PYTHON_API_VERSION);
-
-    const char *argv[1] = {s_python.c_str()};
-    PySys_SetArgv(1, const_cast<char**>(argv));
-
-    #ifndef __EMSCRIPTEN__
-    orig_interrupt_handler = install_interrupt_handlers_();
-    reticulate_setsig(SIGINT, interrupt_handler);
-    #endif
-  }
-
+  } 
+  std::cout<<"python initialized, get main thread"<<std::endl;
   s_main_thread = tthread::this_thread::get_id();
   s_is_python_initialized = true;
   GILScope _gil;
 
   // initialize type objects
-  initialize_type_objects(is_python3());
+  // initialize_type_objects(is_python3()); // DerThorsten: no clou if we can just remove this
 
   // execute activate_this.py script for virtualenv if necessary
   if (!virtualenv_activate.empty())
     py_activate_virtualenv(virtualenv_activate);
 
   // resovlve numpy
-  if (numpy_load_error.empty())
-    import_numpy_api(is_python3(), &s_numpy_load_error);
-  else
-    s_numpy_load_error = numpy_load_error;
+  std::cout<<"initialize numpy api"<<std::endl;
+  std::string numpy_load_error_ = "";
+  import_numpy_api(is_python3(), &numpy_load_error_);
+   
+
 
   #ifndef __EMSCRIPTEN__
   // initialize trace
@@ -3281,12 +3343,16 @@ void py_initialize(const std::string& python,
     flush_std_buffers();
   });
   #endif
+
+  std::cout<<"python initialized"<<std::endl;
 }
 
 bool is_py_finalized = false;
 
 // [[Rcpp::export]]
 void py_finalize() {
+
+  std::cout<<"finalize python"<<std::endl;
 
   if (R_ParseEvalString(".globals$finalized", ns_reticulate) != R_NilValue)
     stop("py_finalize() can only be called once per R session");
@@ -3335,15 +3401,15 @@ void py_finalize() {
   s_is_python_initialized = false;
   s_was_python_initialized_by_reticulate = false;
 
-  // Make sure that attempting to get the gil again will call
-  // `ensure_python_initialized()`, which will now throw an error.
-  R_ParseEvalString("local({ "
-      "rm(list = names(.globals), envir = .globals); " // clear R-level references to previous config or python objects
-      ".globals$finalized <- TRUE; "
-      ".globals$py_repl_active <- FALSE; " // used by IDE?
-    "})",
-    ns_reticulate);
-  PyGILState_Ensure = &_initialize_python_and_PyGILState_Ensure;
+  // // Make sure that attempting to get the gil again will call
+  // // `ensure_python_initialized()`, which will now throw an error.
+  // R_ParseEvalString("local({ "
+  //     "rm(list = names(.globals), envir = .globals); " // clear R-level references to previous config or python objects
+  //     ".globals$finalized <- TRUE; "
+  //     ".globals$py_repl_active <- FALSE; " // used by IDE?
+  //   "})",
+  //   ns_reticulate);
+  //PyGILState_Ensure = &_initialize_python_and_PyGILState_Ensure;
 
   // reticulate::event_loop::deinitialize(/*wait =*/ true);
 }
@@ -3648,7 +3714,7 @@ IntegerVector py_get_attr_types(
       PyObjectPtr attr(PyObject_GetAttrString(type, name.c_str()));
       if (attr.is_null())
         PyErr_Clear();
-      else if (PyObject_TypeCheck(attr, PyProperty_Type)) {
+      else if (PyObject_TypeCheck(attr, &PyProperty_Type)) { // DerThorsten: make it a ptr...
         types[i] = UNKNOWN;
         continue;
       }
@@ -3678,7 +3744,7 @@ IntegerVector py_get_attr_types(
              PyFloat_Check(attr)  ||
              is_python_str(attr))
       types[i] = VECTOR;
-    else if (PyObject_IsInstance(attr, (PyObject*)PyModule_Type))
+    else if (PyObject_IsInstance(attr, (PyObject*)&PyModule_Type))
       types[i] = ENVIRONMENT;
     else
       // presume that other types are objects
@@ -3918,8 +3984,10 @@ int py_tuple_length(PyObjectRef tuple) {
 
 // [[Rcpp::export]]
 PyObjectRef py_module_import(const std::string& module, bool convert) {
+  std::cout<<"import python module "<<module<<std::endl;
   GILScope _gil;
   PyObject* pModule = py_import(module);
+
   if (pModule == NULL)
     throw PythonException(py_fetch_error());
 
@@ -3929,6 +3997,7 @@ PyObjectRef py_module_import(const std::string& module, bool convert) {
 
 // [[Rcpp::export]]
 void py_module_proxy_import(PyObjectRef proxy) {
+  std::cout<<"import python module proxy"<<std::endl;
   SEXP refenv = proxy.get_refenv();
   SEXP module_sym = Rf_install("module");
   SEXP r_module = reticulate_get_var_or_null(refenv, module_sym);
@@ -4933,11 +5002,11 @@ SEXP py_exception_as_condition(PyObject* object, SEXP refenv) {
 
 // [[Rcpp::export]]
 bool py_allow_threads_impl(bool allow = true) {
-  PyGILState_STATE gstate = PyGILState_Ensure();
-  if (allow) {
-    PyGILState_Release(PyGILState_UNLOCKED);
-  } else {
-    PyGILState_Release(PyGILState_LOCKED);
-  }
-  return gstate == PyGILState_UNLOCKED;
+  // PyGILState_STATE gstate = PyGILState_Ensure();
+  // if (allow) {
+  //   PyGILState_Release(PyGILState_UNLOCKED);
+  // } else {
+  //   PyGILState_Release(PyGILState_LOCKED);
+  // }
+  // return gstate == PyGILState_UNLOCKED;
 }

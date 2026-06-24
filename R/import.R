@@ -83,7 +83,7 @@
 #' }
 #'
 #' @export
-import <- function(module, as = NULL, convert = TRUE, delay_load = FALSE) {
+import <- function(module, as = NULL, convert = TRUE, delay_load = FALSE, dont_initialize = FALSE) {
 
   # if there is an as argument then register a filter for it
   if (!is.null(as)) {
@@ -98,7 +98,8 @@ import <- function(module, as = NULL, convert = TRUE, delay_load = FALSE) {
 
     # ensure that python is initialized (pass top level module as
     # a hint as to which version of python to choose)
-    ensure_python_initialized(required_module = module)
+    if(!dont_initialize)
+      ensure_python_initialized(required_module = module)
 
     # import the module
     return(py_module_import(module, convert = convert))

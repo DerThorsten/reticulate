@@ -639,6 +639,12 @@ python_environments <- function(env_dirs, required_module = NULL) {
 
 python_munge_path <- function(python) {
 
+  is_emscripten <- Sys.info()[["sysname"]]== "Emscripten" 
+  if(is_emscripten){
+    # just return
+    return()
+  }
+
   # add the python bin dir to the PATH (so that any execution of python from
   # within the interpreter, from a system call, or from within a terminal
   # hosted within the front end will use the same version of python.

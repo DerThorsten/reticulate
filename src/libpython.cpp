@@ -25,7 +25,7 @@ namespace {
 
 void lastDLErrorMessage(std::string* pError)
 {
-#ifdef _WIN32
+#ifdef _WIN32ƒ
   LPVOID lpMsgBuf;
   DWORD dw = ::GetLastError();
 

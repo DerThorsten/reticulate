@@ -103,7 +103,9 @@ py_clear_error <- function() {
 }
 
 py_initialize <- function(python, libpython, pythonhome, virtualenv_activate, python_major_version, python_minor_version, interactive, numpy_load_error) {
+    print("py_initialize() called")
     invisible(.Call(`_reticulate_py_initialize`, python, libpython, pythonhome, virtualenv_activate, python_major_version, python_minor_version, interactive, numpy_load_error))
+    print("py_initialize() finished")
 }
 
 py_finalize <- function() {

@@ -3,6 +3,8 @@
 
 #include "reticulate_types.h"
 #include <Rcpp.h>
+#include  <Python.h>
+
 
 using namespace Rcpp;
 
@@ -213,6 +215,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type interactive(interactiveSEXP);
     Rcpp::traits::input_parameter< const std::string& >::type numpy_load_error(numpy_load_errorSEXP);
     py_initialize(python, libpython, pythonhome, virtualenv_activate, python_major_version, python_minor_version, interactive, numpy_load_error);
+    std::cout << "post py_initialize() in RCPP" << std::endl;
     return R_NilValue;
 END_RCPP
 }
