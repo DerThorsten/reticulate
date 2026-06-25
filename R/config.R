@@ -13,7 +13,9 @@
 #'
 #' @export
 py_config <- function() {
+  print("call ensuring python initialized")
   ensure_python_initialized()
+  print("ensure python initialized finished")
   .globals$py_config
 }
 
@@ -84,7 +86,7 @@ py_exe <- function() {
 #' @export
 py_config_error_message <- function(prefix) {
   message <- prefix
-  config <- py_config()
+config <- py_config()
   if (!is.null(config)) {
     message <- paste0(message, "\n\nDetected Python configuration:\n\n",
                       format(config), "\n")

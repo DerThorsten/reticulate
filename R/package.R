@@ -61,42 +61,43 @@ ensure_python_initialized <- function(required_module = NULL) {
     register_delay_load_import(required_module)
 
   # perform initialization
+  print("calling initialize_python()")
   .globals$py_config <- initialize_python()
 
-  # clear the global list of delay_load requests
-  .globals$delay_load_imports <- NULL
+  # # clear the global list of delay_load requests
+  # .globals$delay_load_imports <- NULL
 
-  # remap output streams to R output handlers
-  remap_output_streams()
-  set_knitr_python_stdout_hook()
+  # # remap output streams to R output handlers
+  # remap_output_streams()
+  # set_knitr_python_stdout_hook()
 
-  if (is_windows() && ( is_rstudio() || is_positron() ))
-    import("rpytools.subprocess")$patch_subprocess_Popen()
+  # if (is_windows() && ( is_rstudio() || is_positron() ))
+  #   import("rpytools.subprocess")$patch_subprocess_Popen()
 
-  # generate 'R' helper object
-  py_inject_r()
+  # # generate 'R' helper object
+  # py_inject_r()
 
-  # inject hooks
-  py_inject_hooks()
+  # # inject hooks
+  # py_inject_hooks()
 
-  # install required packages
-  configure_environment()
+  # # install required packages
+  # configure_environment()
 
-  # notify front-end (if any) that Python has been initialized
-  callback <- getOption("reticulate.python.afterInitialized")
-  if (is.null(callback))
-    callback <- getOption("reticulate.initialized")
+  # # notify front-end (if any) that Python has been initialized
+  # callback <- getOption("reticulate.python.afterInitialized")
+  # if (is.null(callback))
+  #   callback <- getOption("reticulate.initialized")
 
-  if (is.function(callback))
-    callback()
+  # if (is.function(callback))
+  #   callback()
 
-  # re-install interrupt handler -- note that RStudio tries to re-install its
-  # own interrupt handler when reticulate is initialized, but reticulate needs
-  # to handle interrupts itself (and it can do so compatibly with RStudio)
-  install_interrupt_handlers()
+  # # re-install interrupt handler -- note that RStudio tries to re-install its
+  # # own interrupt handler when reticulate is initialized, but reticulate needs
+  # # to handle interrupts itself (and it can do so compatibly with RStudio)
+  # install_interrupt_handlers()
 
-  # call init hooks
-  call_init_hooks()
+  # # call init hooks
+  # call_init_hooks()
 
 }
 
@@ -265,81 +266,86 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
     print("post py_initialize() in Emscripten")
   }
 
-  print("Python initialized, setting finalizer")
-  # allow enabling the Python finalizer
-  reg.finalizer(.globals, function(e) {
-    try(py_allow_threads_impl(FALSE))
-    if (tolower(Sys.getenv("RETICULATE_ENABLE_PYTHON_FINALIZER")) %in% c("true", "1", "yes"))
-      py_finalize()
-  }, onexit = TRUE)
+  if(TRUE) {
+    print("Python initialized, setting finalizer")
+    # allow enabling the Python finalizer
+    reg.finalizer(.globals, function(e) {
+      try(py_allow_threads_impl(FALSE))
+      if (tolower(Sys.getenv("RETICULATE_ENABLE_PYTHON_FINALIZER")) %in% c("true", "1", "yes"))
+        py_finalize()
+    }, onexit = TRUE)
 
 
-  print("Python initialized, setting globals")
-  # set available flag indicating we have py bindings
-  config$available <- TRUE
+    print("Python initialized, setting globals")
+    # set available flag indicating we have py bindings
+    config$available <- TRUE
 
 
-  if (py_embedded) {
-    print("Python is embedded, adding reticulate python path to sys.path")
-    # we need to insert path to rpytools directly for embedded R
-    path <- system.file("python", package = "reticulate")
-    fmt <- "import sys; sys.path.append(%s)"
-    cmd <- sprintf(fmt, shQuote(path))
+    if (py_embedded) {
+      print("Python is embedded, adding reticulate python path to sys.path")
+      # we need to insert path to rpytools directly for embedded R
+      path <- system.file("python", package = "reticulate")
+      fmt <- "import sys; sys.path.append(%s)"
+      cmd <- sprintf(fmt, shQuote(path))
 
-    # print which cmd we are running
-    print(paste("running command:", cmd))
+      # print which cmd we are running
+      print(paste("running command:", cmd))
 
-    py_run_string_impl(cmd)
-    print("done run string")
-  }
+      py_run_string_impl(cmd)
+      print("done run string")
+    }
 
-  # local({
-  #   # patch sys.executable to point to python.exe, not Rterm.exe or rsession-utf8.exe, #1258
-  #   patch <- sprintf("import sys; sys.executable  = r'''%s'''",
-  #                    config$executable)
-  #   py_run_string_impl(patch, local = TRUE)
-  # })
+    # local({
+    #   # patch sys.executable to point to python.exe, not Rterm.exe or rsession-utf8.exe, #1258
+    #   patch <- sprintf("import sys; sys.executable  = r'''%s'''",
+    #                    config$executable)
+    #   py_run_string_impl(patch, local = TRUE)
+    # })
 
-  # if (nzchar(config$base_executable)) local({
-  #   # just like sys.executable, patch to point to python.exe, not Rterm.exe
-  #   # need to patch for multiprocessing to work on windows, perhaps other things too.
-  #   # in venvs, _base_executable should point to the venv starter, #1430
-  #   patch <- sprintf("import sys; sys._base_executable = r'''%s'''",
-  #                    config$base_executable)
-  #   py_run_string_impl(patch, local = TRUE)
-  # })
+    # if (nzchar(config$base_executable)) local({
+    #   # just like sys.executable, patch to point to python.exe, not Rterm.exe
+    #   # need to patch for multiprocessing to work on windows, perhaps other things too.
+    #   # in venvs, _base_executable should point to the venv starter, #1430
+    #   patch <- sprintf("import sys; sys._base_executable = r'''%s'''",
+    #                    config$base_executable)
+    #   py_run_string_impl(patch, local = TRUE)
+    # })
 
-  print("run string...")
+    print("run string...")
 
-  # ensure modules can be imported from the current working directory
-  py_run_string_impl("import sys; sys.path.insert(0, '')", local = TRUE)
+    # ensure modules can be imported from the current working directory
+    py_run_string_impl("import sys; sys.path.insert(0, '')", local = TRUE)
 
-  # if this is a conda installation, set QT_QPA_PLATFORM_PLUGIN_PATH
-  # https://github.com/rstudio/reticulate/issues/586
-  py_set_qt_qpa_platform_plugin_path(config)
+    # if this is a conda installation, set QT_QPA_PLATFORM_PLUGIN_PATH
+    # https://github.com/rstudio/reticulate/issues/586
+    py_set_qt_qpa_platform_plugin_path(config)
 
-  # if (was_python_initialized_by_reticulate()) {
-  #   allow_threads <- Sys.getenv("RETICULATE_ALLOW_THREADS", "false")
-  #   allow_threads <- tolower(allow_threads) %in% c("true", "1", "yes")
-  #   if (allow_threads) {
-  #     py_allow_threads_impl(TRUE)
-  #   }
-  # }
-  py_allow_threads_impl(FALSE)
+    # if (was_python_initialized_by_reticulate()) {
+    #   allow_threads <- Sys.getenv("RETICULATE_ALLOW_THREADS", "false")
+    #   allow_threads <- tolower(allow_threads) %in% c("true", "1", "yes")
+    #   if (allow_threads) {
+    #     py_allow_threads_impl(TRUE)
+    #   }
+    # }
+     
+    #py_allow_threads_impl(FALSE)
 
-  if(!is_emscripten) {
-    # check for required packages in virtualenvs
-    if (nzchar(config$virtualenv)) {
-      check_required_packages <- Sys.getenv("RETICULATE_CHECK_REQUIRED_PACKAGES", "true")
-      check_required_packages <- tolower(check_required_packages) %in% c("true", "1", "yes")
-      if (check_required_packages) {
-        tryCatch(check_virtualenv_required_packages(config), error = function(e) {
-          # ignore errors, this should never block initialization
-        })
+    if(!is_emscripten) {
+      # check for required packages in virtualenvs
+      if (nzchar(config$virtualenv)) {
+        check_required_packages <- Sys.getenv("RETICULATE_CHECK_REQUIRED_PACKAGES", "true")
+        check_required_packages <- tolower(check_required_packages) %in% c("true", "1", "yes")
+        if (check_required_packages) {
+          tryCatch(check_virtualenv_required_packages(config), error = function(e) {
+            # ignore errors, this should never block initialization
+          })
+        }
       }
     }
+    print("done with ()")
+
   }
-  print("done with ensure_python_initialized()")
+
   # return config
   config
 }

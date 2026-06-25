@@ -87,7 +87,7 @@ tthread::thread::id s_main_thread = 0;
 // [[Rcpp::init]]
 void reticulate_init(DllInfo *dll) {
 
-
+  std::cout<<"reticulate_init"<<std::endl;
 
   sym_py_object = Rf_install("py_object");
   sym_simple = Rf_install("simple");
@@ -106,6 +106,77 @@ void reticulate_init(DllInfo *dll) {
   r_func_py_resolve_module_proxy = reticulate_get_ns_var("py_resolve_module_proxy");
 
   s_main_thread = tthread::this_thread::get_id();
+
+  std::cout<<"initialize python3!!!!"<<std::endl;
+  // // set program name
+  // s_python_v3 = to_wstring(python);
+  // Py_SetProgramName_v3(const_cast<wchar_t*>(s_python_v3.c_str()));
+
+
+
+  //   var side_path = `/lib/python${version_str}/site-packages`;
+
+  //   console.log("PYTHONPATH",pypath);
+  //   console.log("SIDE_PATH",side_path);
+  // Module.setenv("PYTHONHOME", `/`);
+
+
+
+  // get-environment variable PREFIX
+  const char* prefix_env = std::getenv("PREFIX");
+  std::string prefix = prefix_env ? prefix_env : "/";
+  std::cout<<"PREFIX: "<<prefix<<std::endl;
+
+  // set PYTHONPATH
+  int python_major_version = 3;
+  int python_minor_version = 13;
+  const std::string pythonpath = prefix + "/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages:/usr/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages";
+  setenv("PYTHONPATH", pythonpath.c_str(), 1);
+  setenv("PYTHONHOME", prefix.c_str(), 1);
+
+
+
+
+  
+  
+  std::cout<<"initialize python3 interpreter -- simple@"<<std::endl;
+  // initialize python
+
+
+
+  PyStatus status;
+  PyConfig config;
+  
+  PyConfig_InitPythonConfig(&config);
+  // config.verbose = 1;
+  config.site_import = 1; 
+  config.module_search_paths_set = 1;
+  config.install_signal_handlers = 0;
+
+  status = PyConfig_SetString(&config, &config.home, L"/");
+
+
+  PyWideStringList_Append(
+      &config.module_search_paths,
+      L"/lib/python3.13/"
+  );
+
+
+  if (PyStatus_Exception(status))
+  {
+      fprintf(stderr, "%s\n", status.err_msg);
+  }
+
+  // initialize the Python interpreter with the config
+  status = Py_InitializeFromConfig(&config);
+
+
+  if (PyStatus_Exception(status))
+  {
+      fprintf(stderr, "%s\n", status.err_msg);
+  }
+  std::cout<<"done initializing python3 interpreter -- simple@"<<std::endl;
+
 }
 
 inline
@@ -114,7 +185,7 @@ bool is_main_thread() {
 }
 
 // track whether we are using python 3 (set during py_initialize)
-bool s_isPython3 = false;
+bool s_isPython3 = true;
 
 // [[Rcpp::export]]
 bool is_python3() {
@@ -509,8 +580,14 @@ bool py_is_none(PyObject* object) {
 // convenience wrapper for PyImport_Import
 PyObject* py_import(const std::string& module) {
   std::cout<<"in convenience wrapper for PyImport_Import: "<<module<<std::endl;
-  PyObjectPtr module_str(as_python_str(module));
-  return PyImport_Import(module_str);
+  std::cout<<"get pystr"<<std::endl;
+  PyObject* pystr = as_python_str(module);
+  std::cout<<"get module str"<<std::endl;
+  PyObject* module_str(pystr);
+  std::cout<<"do the actual import"<<std::endl;
+  PyObject* mod =  PyImport_Import(module_str);
+  std::cout<<"done with import"<<std::endl;
+  return mod;
 }
 
 
@@ -732,6 +809,7 @@ std::string as_r_class(PyObject* classObj) {
 }
 
 SEXP py_class_names(PyObject* object, bool exception) {
+  std::cout<<"py_class_names"<<std::endl;
 
   // Py_TYPE() usually returns a borrowed reference to object.__class__
   // but can differ if __class__ was modified after the object was created.
@@ -768,16 +846,17 @@ SEXP py_class_names(PyObject* object, bool exception) {
   // and doing that efficiently and robustly on this hot code path is not worth the effort yet.
   // Will wait for TF 2.19 and see if this sorts itself out upstream.
 
+  std::cout<<"1"<<std::endl;
   PyObject* type = (PyObject*) Py_TYPE(object);
   if (type == NULL) {
-
+    std::cout<<"1.1"<<std::endl;
     // this code path gets heavily excercised by py_fetch_error()
     // Something going wrong here, then py_fetch_error() will be of no help.
     // Fortunatly, an Exception here should be an exceedingly rare occurance.
     if (PyErr_Occurred()) PyErr_Print();
     Rcpp::stop("Unable to resolve PyObject type.");
   }
-
+  std::cout<<"2"<<std::endl;
   // call inspect.getmro to get the class and it's bases in
   // method resolution order
   static PyObject* getmro = []() -> PyObject* {
@@ -792,11 +871,15 @@ SEXP py_class_names(PyObject* object, bool exception) {
     return getmro;
   }();
 
+  std::cout<<"3"<<std::endl;
+
   PyObjectPtr classes(PyObject_CallFunctionObjArgs(getmro, type, NULL));
   if (classes.is_null()) {
     if (PyErr_Occurred()) PyErr_Print();
     Rcpp::stop("Exception raised by 'inspect.getmro(<pyobj>)'; unable to build R 'class' attribute");
   }
+
+  std::cout<<"4"<<std::endl;
 
   // start adding class names
   std::vector<std::string> classNames;
@@ -806,22 +889,28 @@ SEXP py_class_names(PyObject* object, bool exception) {
   // +2 to possibly add python.builtin.object and python.builtin.iterator,
   // or "error" and "condition"
 
+
+  std::cout<<"5"<<std::endl;
+
   // add the bases to the R class attribute
   for (Py_ssize_t i = 0; i < len; i++) {
     PyObject* base = PyTuple_GetItem(classes, i); // borrowed
     classNames.push_back(as_r_class(base));
   }
 
+
+  std::cout<<"6"<<std::endl;
+
   // add python.builtin.object if we don't already have it
   if (classNames.empty() || classNames.back() != "python.builtin.object") {
     // typically already there for exceptions (most objects, actually)
     classNames.push_back("python.builtin.object");
   }
-
+  std::cout<<"7"<<std::endl;
   // if it's an iterator, include python.builtin.iterator, before python.builtin.object
   if(PyIter_Check(object))
     classNames.insert(classNames.end() - 1, "python.builtin.iterator");
-
+  std::cout<<"8"<<std::endl;
   // if it's a BaseException instance, append "error"/"interrupt" and "condition"
   if (exception) {
     if (PyErr_GivenExceptionMatches(type, PyExc_KeyboardInterrupt))
@@ -830,9 +919,11 @@ SEXP py_class_names(PyObject* object, bool exception) {
       classNames.push_back("error");
     classNames.push_back("condition");
   }
-
+  std::cout<<"9"<<std::endl;
   RObject classNames_robj = Rcpp::wrap(classNames); // convert + protect
+  std::cout<<"10"<<std::endl;
   RObject out = eval_call(r_func_py_filter_classes, (SEXP) classNames_robj);
+  std::cout<<"11"<<std::endl;
   return out;
 }
 
@@ -866,9 +957,11 @@ SEXP new_refenv() {
 // this steals a reference
 PyObjectRef py_ref(PyObject* object, bool convert)
 {
-
+  std::cout<<"in py_ref"<<std::endl;
   // wrap
   PyObjectRef ref(object, convert);
+
+  std::cout<<"return the ref"<<std::endl;
   return ref;
 
 }
@@ -1470,6 +1563,7 @@ bool is_py_object(SEXP x) {
 // if we fail to convert, this creates a new reference to x
 // (i.e, caller should call Py_DecRef() / PyObjectPtr.detach() for any refs caller created)
 SEXP py_to_r(PyObject* x, bool convert) {
+  std::cout<<"in py_to_r"<<std::endl;
   GILScope _gil;
   if(!convert) {
     Py_IncRef(x);
@@ -1488,6 +1582,7 @@ SEXP py_to_r(PyObject* x, bool convert) {
 
 // [[Rcpp::export]]
 SEXP py_to_r_cpp(SEXP x) {
+  std::cout<<"in py_to_r_cpp"<<std::endl;
 
   // reflect non python objects
   if (!is_py_object(x)) return x;
@@ -3209,80 +3304,17 @@ void py_initialize(const std::string& python,
       std::cout<<"python3 already initialized, skip initialization"<<std::endl;
       // if R is embedded in a python environment, rpycall has to be loaded as a regular
       // module.
-      GILScope scope;
+      //GILScope scope;
       PyImport_AddModule("rpycall");
       PyDict_SetItemString(PyImport_GetModuleDict(), "rpycall", initializeRPYCall());
 
     } else {
-      std::cout<<"initialize python3"<<std::endl;
-      // // set program name
-      // s_python_v3 = to_wstring(python);
-      // Py_SetProgramName_v3(const_cast<wchar_t*>(s_python_v3.c_str()));
-
-
-
-      //   var side_path = `/lib/python${version_str}/site-packages`;
- 
-      //   console.log("PYTHONPATH",pypath);
-      //   console.log("SIDE_PATH",side_path);
-      // Module.setenv("PYTHONHOME", `/`);
-
-
-
-      // get-environment variable PREFIX
-      const char* prefix_env = std::getenv("PREFIX");
-      std::string prefix = prefix_env ? prefix_env : "/";
-      std::cout<<"PREFIX: "<<prefix<<std::endl;
-
-      // set PYTHONPATH
-      const std::string pythonpath = prefix + "/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages:/usr/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages";
-      setenv("PYTHONPATH", pythonpath.c_str(), 1);
-      setenv("PYTHONHOME", prefix.c_str(), 1);
-
-      std::cout<<"do not set python home to "<<pythonhome<<" and python path to "<<pythonpath<<std::endl;
-
-
-
-      
-      std::cout<<"DO append rpycall to inittab"<<std::endl;
-      PyImport_AppendInittab("rpycall", &initializeRPYCall);
-      
-      
-      std::cout<<"initialize python3 interpreter -- simple@"<<std::endl;
-      // initialize python
-
-
-
-      PyStatus status;
-      PyConfig config;
-      
-      PyConfig_InitPythonConfig(&config);
-      config.verbose = 1;
-      config.site_import = 1; 
-      config.module_search_paths_set = 1;
-
-      status = PyConfig_SetString(&config, &config.home, L"/");
-
-
-      PyWideStringList_Append(
-          &config.module_search_paths,
-          L"/lib/python3.13/"
-      );
-
-
-      if (PyStatus_Exception(status))
-      {
-          fprintf(stderr, "%s\n", status.err_msg);
-      }
-
-      // initialize the Python interpreter with the config
-      status = Py_InitializeFromConfig(&config);
-
-
+  
+      std::cout<<"bug"<<std::endl;
 
 
       // add rpycall module 
-      s_was_python_initialized_by_reticulate = true;
+      s_was_python_initialized_by_reticulate = false;
 
 #ifndef _WIN32
 #ifndef __EMSCRIPTEN__
@@ -3306,10 +3338,10 @@ void py_initialize(const std::string& python,
   std::cout<<"python initialized, get main thread"<<std::endl;
   s_main_thread = tthread::this_thread::get_id();
   s_is_python_initialized = true;
-  GILScope _gil;
+  //GILScope _gil;
 
   // initialize type objects
-  // initialize_type_objects(is_python3()); // DerThorsten: no clou if we can just remove this
+  //initialize_type_objects(is_python3()); // DerThorsten: no clou if we can just remove thi
 
   // execute activate_this.py script for virtualenv if necessary
   if (!virtualenv_activate.empty())
@@ -3990,9 +4022,8 @@ PyObjectRef py_module_import(const std::string& module, bool convert) {
 
   if (pModule == NULL)
     throw PythonException(py_fetch_error());
-
+  std::cout<<"imported python module "<<module<<"doing py_ref"<<std::endl;
   return py_ref(pModule, convert);
-
 }
 
 // [[Rcpp::export]]
