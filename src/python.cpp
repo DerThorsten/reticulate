@@ -3434,7 +3434,7 @@ void py_finalize() {
 #endif
 #endif
 
-    is_py_finalized = true;
+    //is_py_finalized = true;
     Py_Finalize();
   }
 
