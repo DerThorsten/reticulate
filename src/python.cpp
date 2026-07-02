@@ -127,55 +127,7 @@ void reticulate_init(DllInfo *dll) {
   std::string prefix = prefix_env ? prefix_env : "/";
   std::cout<<"PREFIX: "<<prefix<<std::endl;
 
-  // set PYTHONPATH
-  int python_major_version = 3;
-  int python_minor_version = 13;
-  const std::string pythonpath = prefix + "/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages:/usr/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages";
-  setenv("PYTHONPATH", pythonpath.c_str(), 1);
-  setenv("PYTHONHOME", prefix.c_str(), 1);
-
-
-
-
-  
-  
-  std::cout<<"initialize python3 interpreter -- simple@"<<std::endl;
-  // initialize python
-
-
-
-  PyStatus status;
-  PyConfig config;
-  
-  PyConfig_InitPythonConfig(&config);
-  // config.verbose = 1;
-  config.site_import = 1; 
-  config.module_search_paths_set = 1;
-  config.install_signal_handlers = 0;
-
-  status = PyConfig_SetString(&config, &config.home, L"/");
-
-
-  PyWideStringList_Append(
-      &config.module_search_paths,
-      L"/lib/python3.13/"
-  );
-
-
-  if (PyStatus_Exception(status))
-  {
-      fprintf(stderr, "%s\n", status.err_msg);
-  }
-
-  // initialize the Python interpreter with the config
-  status = Py_InitializeFromConfig(&config);
-
-
-  if (PyStatus_Exception(status))
-  {
-      fprintf(stderr, "%s\n", status.err_msg);
-  }
-  std::cout<<"done initializing python3 interpreter -- simple@"<<std::endl;
+ 
 
 }
 
@@ -270,6 +222,7 @@ SEXP py_capsule_read(PyObject* capsule) {
 
 
 int free_sexp(void* sexp) {
+  std::cout<<"free_sexp called"<<std::endl;
   // wrap Rcpp_precious_remove() to satisfy
   // Py_AddPendingCall() signature and return value requirements
   Rcpp_precious_remove((SEXP) sexp);
@@ -277,6 +230,7 @@ int free_sexp(void* sexp) {
 }
 
 void Rcpp_precious_remove_main_thread(SEXP object) {
+  std::cout<<"Rcpp_precious_remove_main_thread"<<std::endl;
   if (is_main_thread()) {
     return Rcpp_precious_remove(object);
   }
@@ -303,7 +257,7 @@ void Rcpp_precious_remove_main_thread(SEXP object) {
 }
 
 void py_capsule_free(PyObject* capsule) {
-
+  std::cout<<"py_capsule_free called"<<std::endl;
   SEXP object = (SEXP)PyCapsule_GetPointer(capsule, r_object_string);
   if (object == NULL)
     throw PythonException(py_fetch_error());
@@ -2640,6 +2594,7 @@ struct PythonCallResult {
 };
 
 PythonCallResult actually_call_r_function(PyObject* args, PyObject* keywords) {
+  std::cout<<"actually_call_r_function called"<<std::endl;
   GILScope _gil;
   PyObject* capsule = PyTuple_GetItem(args, 0);
   RObject rFunction = py_capsule_read(capsule);
@@ -3313,8 +3268,72 @@ void py_initialize(const std::string& python,
       std::cout<<"bug"<<std::endl;
 
 
+
+      // set PYTHONPATH
+      int python_major_version = 3;
+      int python_minor_version = 13;
+      const std::string pythonpath = "/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages:/usr/lib/python" + std::to_string(python_major_version) + "." + std::to_string(python_minor_version) + "/site-packages";
+      setenv("PYTHONPATH", pythonpath.c_str(), 1);
+      setenv("PYTHONHOME", "/", 1);
+
+
+
+
+    
+    
+      std::cout<<"initialize python3 interpreter -- simple@"<<std::endl;
+      // initialize python
+
+
+
+      PyStatus status;
+      PyConfig config;
+
+      // add rpycall module
+      PyImport_AppendInittab("rpycall", &initializeRPYCall);
+
+      
+      PyConfig_InitPythonConfig(&config);
+      // config.verbose = 1;
+      config.site_import = 1; 
+      config.module_search_paths_set = 1;
+      config.install_signal_handlers = 0;
+
+      status = PyConfig_SetString(&config, &config.home, L"/");
+
+
+      PyWideStringList_Append(
+          &config.module_search_paths,
+          L"/lib/python3.13/"
+      );
+
+
+      if (PyStatus_Exception(status))
+      {
+          fprintf(stderr, "%s\n", status.err_msg);
+      }
+
+      // initialize the Python interpreter with the config
+      status = Py_InitializeFromConfig(&config);
+
+
+      if (PyStatus_Exception(status))
+      {
+          fprintf(stderr, "%s\n", status.err_msg);
+      }
+      std::cout<<"done initializing python3 interpreter -- simple@"<<std::endl;
+
+
+
+
+
+
+
+
+
+
       // add rpycall module 
-      s_was_python_initialized_by_reticulate = false;
+      s_was_python_initialized_by_reticulate = true;
 
 #ifndef _WIN32
 #ifndef __EMSCRIPTEN__
@@ -3379,7 +3398,7 @@ void py_initialize(const std::string& python,
   std::cout<<"python initialized"<<std::endl;
 }
 
-bool is_py_finalized = false;
+bool is_d = false;
 
 // [[Rcpp::export]]
 void py_finalize() {

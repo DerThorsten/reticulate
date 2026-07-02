@@ -81,6 +81,12 @@ public:
 
   }
 
+  // Look for the C++ destructor wrapper
+  PyObjectRef::~PyObjectRef() {
+    std::cout << "[RETICULATE-DEBUG] Entering Destructor for PyObject: "<< std::endl;
+    
+}
+
   void set(PyObject* object) {
     // used to populate delay_load module proxies
     SEXP refenv = get_refenv();
@@ -193,6 +199,7 @@ class GILScope {
 };
 
 inline void python_object_finalize(SEXP object) {
+  std::cout<<"python_object_finalize called"<<std::endl;
   if (is_py_finalized) return;
   GILScope gilscope;
   PyObject* pyObject = (PyObject*)R_ExternalPtrAddr(object);
