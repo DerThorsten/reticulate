@@ -82,10 +82,10 @@ public:
   }
 
   // Look for the C++ destructor wrapper
-  PyObjectRef::~PyObjectRef() {
+  ~PyObjectRef() {
     std::cout << "[RETICULATE-DEBUG] Entering Destructor for PyObject: "<< std::endl;
     
-}
+  }
 
   void set(PyObject* object) {
     // used to populate delay_load module proxies
