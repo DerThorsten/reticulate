@@ -24,7 +24,7 @@ extern SEXP sym_py_object;
 extern SEXP sym_convert;
 extern SEXP sym_simple;
 extern SEXP sym_pyobj;
-extern bool is_py_finalized;
+// extern bool is_py_finalized;
 
 
 
@@ -200,7 +200,7 @@ class GILScope {
 
 inline void python_object_finalize(SEXP object) {
   std::cout<<"python_object_finalize called"<<std::endl;
-  if (is_py_finalized) return;
+  //if (is_py_finalized) return;
   GILScope gilscope;
   PyObject* pyObject = (PyObject*)R_ExternalPtrAddr(object);
   if (pyObject != NULL)
