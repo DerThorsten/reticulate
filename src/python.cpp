@@ -2275,6 +2275,7 @@ PyObject* r_to_py(RObject x, bool convert) {
 // will have an active reference count on it)
 // the convert arg is only applicable to R functions that will being wrapped in python functions.
 PyObject* r_to_py_cpp(RObject x, bool convert) {
+  std::cout<<"R to py cpp called: convert="<<convert<<"\n";
   GILScope _gil;
 
   int type = x.sexp_type();
