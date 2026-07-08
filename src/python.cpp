@@ -3357,7 +3357,7 @@ void py_initialize(const std::string& python,
   std::cout<<"python initialized, get main thread"<<std::endl;
   s_main_thread = tthread::this_thread::get_id();
   s_is_python_initialized = true;
-  //GILScope _gil;
+  GILScope _gil;
 
   // initialize type objects
   //initialize_type_objects(is_python3()); // DerThorsten: no clou if we can just remove thi
@@ -5059,4 +5059,6 @@ bool py_allow_threads_impl(bool allow = true) {
   //   PyGILState_Release(PyGILState_LOCKED);
   // }
   // return gstate == PyGILState_UNLOCKED;
+  //return 
+  return true;
 }
