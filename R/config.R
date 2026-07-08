@@ -13,9 +13,7 @@
 #'
 #' @export
 py_config <- function() {
-  print("call ensuring python initialized")
   ensure_python_initialized()
-  print("ensure python initialized finished")
   .globals$py_config
 }
 

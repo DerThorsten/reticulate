@@ -250,7 +250,6 @@ namespace libpython {
 #define Py_GT 4
 #define Py_GE 5
 
-bool import_numpy_api(bool python3, std::string* pError);
 int flush_std_buffers();
 //  
 

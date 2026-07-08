@@ -2118,7 +2118,6 @@ bool is_convertible_to_numpy(RObject x) {
 
 PyObject* r_to_py_numpy(RObject x, bool convert) {
 
-  std::cout<<"r_to_py_numpy called with convert="<<convert<<"\n";
 
   int type = x.sexp_type();
   SEXP sexp = x.get__();
@@ -2138,7 +2137,6 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
   int typenum;
   void* data;
 
-  std::cout<<"1"<<std::endl;
   if (type == INTSXP) {
     if (sizeof(long) == 4)
       typenum = NPY_LONG;
@@ -2167,7 +2165,6 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
            "numeric, complex, logical, and character matrixes can be "
            "converted");
   }
-  std::cout<<"2"<<std::endl;
   int flags = NPY_ARRAY_FARRAY_RO;
 
   // because R logical vectors are just ints under the
@@ -2188,7 +2185,6 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
     }
 
   }
-  std::cout<<"3"<<std::endl;
   // create the array
   PyObject* array = PyArray_New(&PyArray_Type,
                                 nd,
@@ -2202,7 +2198,6 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
                                 typenum == NPY_VOID ? 1 : 0, // itemsize
                                 flags,
                                 NULL);
-  std::cout<<"4"<<std::endl;
   if(typenum == NPY_BOOL)
     UNPROTECT(1); // strides_s
 
@@ -2236,7 +2231,6 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
       PyArray_SetBaseObject((PyArrayObject*)array, capsule.detach());
     }
   }
-  std::cout<<"1"<<std::endl;
   // return it
   return array;
 
@@ -2281,7 +2275,6 @@ PyObject* r_to_py(RObject x, bool convert) {
 // will have an active reference count on it)
 // the convert arg is only applicable to R functions that will being wrapped in python functions.
 PyObject* r_to_py_cpp(RObject x, bool convert) {
-  std::cout<<"R to py cpp called: convert="<<convert<<"\n";
   GILScope _gil;
 
   int type = x.sexp_type();
@@ -3295,13 +3288,9 @@ void py_initialize(const std::string& python,
   //import_numpy_api(is_python3(), &numpy_load_error_);
    
   if (PyArray_API == NULL) {
-    std::cout << "importing numpy C API" << std::endl;
-      import_array1(); // Populates PyArray_API
+    import_array1(); // Populates PyArray_API
   }
-  else{
-    std::cout << "numpy C API already imported" << std::endl;
-  }
-  std::cout << "numpy C API pointer: " << PyArray_API << std::endl;
+
 
   #ifndef __EMSCRIPTEN__
   // initialize trace
