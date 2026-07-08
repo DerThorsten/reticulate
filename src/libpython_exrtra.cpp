@@ -1,4 +1,7 @@
-
+// in the emscripten-build of reticulate we link against a static python 
+// library, hence we cannot use the "libpython.cpp/h" part since this 
+// assumes a dynamic library. Instead we include the "libpython_extra.cpp/h" part which
+// contains the same code from libpython **which is not part of python itself**
 #define LIBPYTHON_CPP
 #include "libpython_extra.h"
 
@@ -69,16 +72,13 @@ int flush_std_buffers() {
 
 bool import_numpy_api(bool python3, std::string* pError) {
 
-  std::cout<<"importing numpy api"<<std::endl;
   PyObject* numpy = PyImport_ImportModule("numpy.core.multiarray");
   if (numpy == NULL) {
-    std::cout<<"numpy import failed"<<std::endl;
     *pError = "numpy.core.multiarray failed to import";
     PyErr_Clear();
     return false;
   }
 
-  std::cout<<"numpy imported, looking for _ARRAY_API"<<std::endl;
 
   PyObject* c_api = PyObject_GetAttrString(numpy, "_ARRAY_API");
   Py_DecRef(numpy);
@@ -87,7 +87,6 @@ bool import_numpy_api(bool python3, std::string* pError) {
     return false;
   }
 
-  std::cout<<"_ARRAY_API found, importing api pointer"<<std::endl;
   // get api pointer
   // if (python3)
     PyArray_API = (void **)PyCapsule_GetPointer(c_api, NULL);

@@ -43,7 +43,6 @@ is_python_finalized <- function() {
 
 ensure_python_initialized <- function(required_module = NULL) {
 
-  print("ensure_python_initialized() called")
   # nothing to do if python is initialized
   if (is_python_initialized())
     return()
@@ -61,7 +60,6 @@ ensure_python_initialized <- function(required_module = NULL) {
     register_delay_load_import(required_module)
 
   # perform initialization
-  print("calling initialize_python()")
   .globals$py_config <- initialize_python()
 
   # # clear the global list of delay_load requests
@@ -75,7 +73,6 @@ ensure_python_initialized <- function(required_module = NULL) {
   #   import("rpytools.subprocess")$patch_subprocess_Popen()
 
   # # generate 'R' helper object
-  print("inject r")
   py_inject_r()
 
   # # inject hooks
@@ -114,7 +111,6 @@ call_init_hooks <- function() {
 
 initialize_python <- function(required_module = NULL, use_environment = NULL) {
   is_emscripten <- Sys.info()[["sysname"]]== "Emscripten" 
-  print("initialize_python() called")
   if(!is_emscripten) {
 
     # provide hint to install Miniconda if no Python is found
@@ -252,7 +248,6 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
       # on.exit(options(op), add = TRUE)
       # py_discover_config(required_module, use_environment)
     })
-    print("try to initialize Python in Emscripten")
     py_embedded <- TRUE
     py_initialize(
       "python",
@@ -264,11 +259,9 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
       FALSE,
       numpy_load_error
     )
-    print("post py_initialize() in Emscripten")
   }
 
   if(TRUE) {
-    print("Python initialized, setting finalizer")
     # allow enabling the Python finalizer
     reg.finalizer(.globals, function(e) {
       try(py_allow_threads_impl(FALSE))
@@ -277,23 +270,16 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
     }, onexit = TRUE)
 
 
-    print("Python initialized, setting globals")
     # set available flag indicating we have py bindings
     config$available <- TRUE
 
 
     if (py_embedded) {
-      print("Python is embedded, adding reticulate python path to sys.path")
       # we need to insert path to rpytools directly for embedded R
       path <- system.file("python", package = "reticulate")
       fmt <- "import sys; sys.path.append(%s)"
       cmd <- sprintf(fmt, shQuote(path))
-
-      # print which cmd we are running
-      print(paste("running command:", cmd))
-
       py_run_string_impl(cmd)
-      print("done run string")
     }
 
     # local({
@@ -311,8 +297,6 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
     #                    config$base_executable)
     #   py_run_string_impl(patch, local = TRUE)
     # })
-
-    print("run string...")
 
     # ensure modules can be imported from the current working directory
     py_run_string_impl("import sys; sys.path.insert(0, '')", local = TRUE)
@@ -343,8 +327,6 @@ initialize_python <- function(required_module = NULL, use_environment = NULL) {
         }
       }
     }
-    print("done with ()")
-
   }
 
   # return config

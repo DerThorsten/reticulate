@@ -40,17 +40,11 @@ public:
   }
 
   explicit PyObjectRef(PyObject* object, bool convert, bool simple = true) {
-    std::cout<<"PyObjectRef Constructor"<<std::endl;
-
-
-
-    std::cout<<"1"<<std::endl;
     // this steals a reference to 'object'.
     // (i.e., we call Py_DecRef on it eventually, from the xtptr finalizer)
     SEXP xptr = PROTECT(R_MakeExternalPtr((void*) object, R_NilValue, R_NilValue));
     R_RegisterCFinalizer(xptr, python_object_finalize);
 
-    std::cout<<"2"<<std::endl;
 
     SEXP refenv = PROTECT(new_refenv());
     Rf_defineVar(sym_pyobj, xptr, refenv);
@@ -60,31 +54,19 @@ public:
     if (callable || exception || !simple)
       Rf_defineVar(sym_simple, Rf_ScalarLogical(false), refenv);
     Rf_setAttrib(refenv, R_ClassSymbol, py_class_names(object, exception));
-    std::cout<<"3"<<std::endl;
     if (callable) {
-      std::cout<<"3.1"<<std::endl;
       SEXP r_fn = PROTECT(py_callable_as_function(refenv, convert));
       r_fn = PROTECT(py_to_r_wrapper(r_fn));
       this->set__(r_fn); // PROTECT()
       UNPROTECT(4);
     } else if (exception) {
-      std::cout<<"3.2"<<std::endl;
       SEXP r_cond = PROTECT(py_exception_as_condition(object, refenv));
       this->set__(r_cond);
       UNPROTECT(3);
     } else {
-      std::cout<<"3.3"<<std::endl;
       this->set__(refenv);
       UNPROTECT(2);
     }
-    std::cout<<"4"<<std::endl;
-
-  }
-
-  // Look for the C++ destructor wrapper
-  ~PyObjectRef() {
-    std::cout << "[RETICULATE-DEBUG] Entering Destructor for PyObject: "<< std::endl;
-    
   }
 
   void set(PyObject* object) {
@@ -199,7 +181,6 @@ class GILScope {
 };
 
 inline void python_object_finalize(SEXP object) {
-  std::cout<<"python_object_finalize called"<<std::endl;
   //if (is_py_finalized) return;
   GILScope gilscope;
   PyObject* pyObject = (PyObject*)R_ExternalPtrAddr(object);
