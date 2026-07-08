@@ -15,7 +15,7 @@
 #define _PYTHON_API_VERSION 1013
 #define _PYTHON3_ABI_VERSION 3
 
-LIBPYTHON_EXTERN void **PyArray_API;
+// LIBPYTHON_EXTERN void **PyArray_API;
 //LIBPYTHON_EXTERN unsigned int PyArray_RUNTIME_VERSION;
 
 namespace reticulate {

@@ -9,6 +9,7 @@
 
 #include <R.h>
 #include <Rinternals.h>
+#include <numpy/arrayobject.h>
 
 
 #include <string>
@@ -72,32 +73,42 @@ int flush_std_buffers() {
 
 bool import_numpy_api(bool python3, std::string* pError) {
 
-  PyObject* numpy = PyImport_ImportModule("numpy.core.multiarray");
-  if (numpy == NULL) {
-    *pError = "numpy.core.multiarray failed to import";
-    PyErr_Clear();
-    return false;
-  }
-
-
-  PyObject* c_api = PyObject_GetAttrString(numpy, "_ARRAY_API");
-  Py_DecRef(numpy);
-  if (c_api == NULL) {
-    *pError = "numpy.core.multiarray _ARRAY_API not found";
-    return false;
-  }
-
-  // get api pointer
-  // if (python3)
-    PyArray_API = (void **)PyCapsule_GetPointer(c_api, NULL);
-  // else
-  //   PyArray_API = (void **)PyCObject_AsVoidPtr(c_api);
-
-  Py_DecRef(c_api);
   if (PyArray_API == NULL) {
-    *pError = "_ARRAY_API is NULL pointer";
-    return false;
+    std::cout << "importing numpy C API" << std::endl;
+      import_array(); // Populates PyArray_API
   }
+  else{
+    std::cout << "numpy C API already imported" << std::endl;
+  }
+  std::cout << "numpy C API pointer: " << PyArray_API << std::endl;
+
+
+  // PyObject* numpy = PyImport_ImportModule("numpy.core.multiarray");
+  // if (numpy == NULL) {
+  //   *pError = "numpy.core.multiarray failed to import";
+  //   PyErr_Clear();
+  //   return false;
+  // }
+
+
+  // PyObject* c_api = PyObject_GetAttrString(numpy, "_ARRAY_API");
+  // Py_DecRef(numpy);
+  // if (c_api == NULL) {
+  //   *pError = "numpy.core.multiarray _ARRAY_API not found";
+  //   return false;
+  // }
+
+  // // get api pointer
+  // // if (python3)
+  //   PyArray_API = (void **)PyCapsule_GetPointer(c_api, NULL);
+  // // else
+  // //   PyArray_API = (void **)PyCObject_AsVoidPtr(c_api);
+
+  // Py_DecRef(c_api);
+  // if (PyArray_API == NULL) {
+  //   *pError = "_ARRAY_API is NULL pointer";
+  //   return false;
+  // }
 
   // check C API version
   // we aim to compile a single binary compatible with both numpy 2.x and 1.x

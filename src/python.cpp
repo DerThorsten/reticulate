@@ -86,6 +86,7 @@ tthread::thread::id s_main_thread = 0;
 // [[Rcpp::init]]
 void reticulate_init(DllInfo *dll) {
 
+  
 
   sym_py_object = Rf_install("py_object");
   sym_simple = Rf_install("simple");
@@ -2117,6 +2118,8 @@ bool is_convertible_to_numpy(RObject x) {
 
 PyObject* r_to_py_numpy(RObject x, bool convert) {
 
+  std::cout<<"r_to_py_numpy called with convert="<<convert<<"\n";
+
   int type = x.sexp_type();
   SEXP sexp = x.get__();
 
@@ -2125,7 +2128,7 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
   IntegerVector dimensions = (dim_sexp != R_NilValue)
     ? IntegerVector(dim_sexp)
     : IntegerVector::create(Rf_xlength(x));
-
+  
   int nd = dimensions.length();
   std::vector<npy_intp> dims(nd);
   for (int i = 0; i < nd; i++)
@@ -2134,6 +2137,8 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
   // get pointer + type for underlying data
   int typenum;
   void* data;
+
+  std::cout<<"1"<<std::endl;
   if (type == INTSXP) {
     if (sizeof(long) == 4)
       typenum = NPY_LONG;
@@ -2162,7 +2167,7 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
            "numeric, complex, logical, and character matrixes can be "
            "converted");
   }
-
+  std::cout<<"2"<<std::endl;
   int flags = NPY_ARRAY_FARRAY_RO;
 
   // because R logical vectors are just ints under the
@@ -2183,6 +2188,7 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
     }
 
   }
+  std::cout<<"3"<<std::endl;
   // create the array
   PyObject* array = PyArray_New(&PyArray_Type,
                                 nd,
@@ -2196,7 +2202,7 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
                                 typenum == NPY_VOID ? 1 : 0, // itemsize
                                 flags,
                                 NULL);
-
+  std::cout<<"4"<<std::endl;
   if(typenum == NPY_BOOL)
     UNPROTECT(1); // strides_s
 
@@ -2230,7 +2236,7 @@ PyObject* r_to_py_numpy(RObject x, bool convert) {
       PyArray_SetBaseObject((PyArrayObject*)array, capsule.detach());
     }
   }
-
+  std::cout<<"1"<<std::endl;
   // return it
   return array;
 
@@ -3286,9 +3292,16 @@ void py_initialize(const std::string& python,
 
   // resovlve numpy
   std::string numpy_load_error_ = "";
-  import_numpy_api(is_python3(), &numpy_load_error_);
+  //import_numpy_api(is_python3(), &numpy_load_error_);
    
-
+  if (PyArray_API == NULL) {
+    std::cout << "importing numpy C API" << std::endl;
+      import_array1(); // Populates PyArray_API
+  }
+  else{
+    std::cout << "numpy C API already imported" << std::endl;
+  }
+  std::cout << "numpy C API pointer: " << PyArray_API << std::endl;
 
   #ifndef __EMSCRIPTEN__
   // initialize trace
